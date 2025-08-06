@@ -1,21 +1,38 @@
 import streamlit as st
 import pandas as pd
 
-st.title("🔗 Backlink Metrics Tool")
-st.write("Upload Ahrefs and Majestic CSVs to generate a combined backlink analysis sheet with LD:RD and TF:CF ratios.")
+# Predefined template structure
+TEMPLATE_COLUMNS = [
+    'Domain',
+    'Domain Rating',
+    'Ref domains Dofollow',
+    'Linked Domains',
+    'TrustFlow',
+    'CitationFlow',
+    'TopicalTrustFlow_Topic_0',
+    'TopicalTrustFlow_Value_0',
+    'TopicalTrustFlow_Topic_1',
+    'TopicalTrustFlow_Value_1',
+    'TopicalTrustFlow_Topic_2',
+    'TopicalTrustFlow_Value_2',
+    'LD:RD Ratio',
+    'TF:CF Ratio',
+    'Total Traffic'
+]
 
-# File uploads
+st.title("🔗 Backlink Metrics Tool")
+st.write("Upload your Ahrefs and Majestic backlink CSVs. The app will merge, calculate LD:RD and TF:CF ratios, and show the final output.")
+
+# File uploaders
 ahrefs_file = st.file_uploader("Upload Ahrefs CSV", type=["csv", "txt"])
 majestic_file = st.file_uploader("Upload Majestic CSV", type=["csv", "txt"])
-template_file = st.file_uploader("Upload Template CSV", type="csv")
 
-# Processing logic
-if ahrefs_file and majestic_file and template_file:
+# When both files are uploaded
+if ahrefs_file and majestic_file:
     try:
-        # Read files
+        # Load files
         ahrefs_df = pd.read_csv(ahrefs_file, sep="\t", encoding="utf-16")  # Ahrefs
         majestic_df = pd.read_csv(majestic_file)  # Majestic
-        template_df = pd.read_csv(template_file)
 
         # Normalize domain names
         ahrefs_df["Domain"] = ahrefs_df["Target"].str.strip("/")
@@ -24,21 +41,19 @@ if ahrefs_file and majestic_file and template_file:
         # Merge
         merged = pd.merge(ahrefs_df, majestic_df, on="Domain", how="inner")
 
-        # Compute ratios
+        # Calculate ratios
         merged["LD:RD Ratio"] = merged["Linked Domains"] / merged["Ref domains Dofollow"]
         merged["TF:CF Ratio"] = merged["TrustFlow"] / merged["CitationFlow"]
 
-        # Apply template structure
-        final_columns = template_df.columns.tolist()
-        final_df = merged[final_columns]
+        # Final structured output
+        final_df = merged[TEMPLATE_COLUMNS]
 
-        # Show preview
-        st.success("✅ Successfully merged and processed!")
-        st.dataframe(final_df.head())
+        st.success("✅ Merged and processed successfully!")
+        st.dataframe(final_df)
 
         # Download button
         csv = final_df.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Download Final Output", data=csv, file_name="backlink_report.csv", mime="text/csv")
+        st.download_button("📥 Download CSV", data=csv, file_name="backlink_output.csv", mime="text/csv")
 
     except Exception as e:
-        st.error(f"❌ Error processing files: {e}")
+        st.error(f"❌ Something went wrong: {e}")
