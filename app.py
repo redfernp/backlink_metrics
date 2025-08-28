@@ -1,75 +1,108 @@
 import streamlit as st
 import pandas as pd
 
-st.title("🔗 Domain + Page Backlink Metrics Tool")
+st.title("🔗 Backlink Metrics Tool")
 
-st.write("""
-Upload the following **4 CSV files**:
-1. 📄 Domain-level Ahrefs export (`.csv`, UTF-16 tab-separated)
-2. 📄 Domain-level Majestic export (`.csv`)
-3. 📄 Page-level Ahrefs export (`.csv`, UTF-16 tab-separated)
-4. 📄 Page-level Majestic export (`.csv`)
-""")
+# Step 1: Choose analysis mode
+mode = st.radio("Select what you want to analyze:", ["Domain Metrics Only", "Page Metrics Only", "Both Combined"])
 
-# Upload files
-ahrefs_domain = st.file_uploader("Upload Domain-Level Ahrefs CSV", type="csv", key="ahrefs_domain")
-majestic_domain = st.file_uploader("Upload Domain-Level Majestic CSV", type="csv", key="majestic_domain")
-ahrefs_page = st.file_uploader("Upload Page-Level Ahrefs CSV", type="csv", key="ahrefs_page")
-majestic_page = st.file_uploader("Upload Page-Level Majestic CSV", type="csv", key="majestic_page")
+# File uploaders based on mode
+ahrefs_domain = majestic_domain = ahrefs_page = majestic_page = None
 
-if all([ahrefs_domain, majestic_domain, ahrefs_page, majestic_page]):
-    try:
-        # Load CSVs
-        df_ahrefs_domain = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
-        df_majestic_domain = pd.read_csv(majestic_domain)
-        df_ahrefs_page = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16")
-        df_majestic_page = pd.read_csv(majestic_page)
+if mode == "Domain Metrics Only" or mode == "Both Combined":
+    ahrefs_domain = st.file_uploader("Upload Domain-Level Ahrefs CSV (UTF-16)", type="csv", key="ahrefs_domain")
+    majestic_domain = st.file_uploader("Upload Domain-Level Majestic CSV", type="csv", key="majestic_domain")
 
-        # Normalize domain and URL
-        df_ahrefs_domain["Domain"] = df_ahrefs_domain["Target"].str.strip("/")
-        df_majestic_domain["Domain"] = df_majestic_domain["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+if mode == "Page Metrics Only" or mode == "Both Combined":
+    ahrefs_page = st.file_uploader("Upload Page-Level Ahrefs CSV (UTF-16)", type="csv", key="ahrefs_page")
+    majestic_page = st.file_uploader("Upload Page-Level Majestic CSV", type="csv", key="majestic_page")
 
-        df_ahrefs_page["Page URL"] = df_ahrefs_page["Target"].str.strip("/")
-        df_majestic_page["Page URL"] = df_majestic_page["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+# Step 2: Logic for each mode
+try:
+    if mode == "Domain Metrics Only" and ahrefs_domain and majestic_domain:
+        df_ahrefs = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
+        df_majestic = pd.read_csv(majestic_domain)
+        df_ahrefs["Domain"] = df_ahrefs["Target"].str.strip("/")
+        df_majestic["Domain"] = df_majestic["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+        domain = pd.merge(df_ahrefs, df_majestic, on="Domain", how="inner")
+        domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
+        domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
 
-        # Merge domain-level
-        domain_merged = pd.merge(df_ahrefs_domain, df_majestic_domain, on="Domain", how="inner")
-        domain_merged["LD:RD Ratio"] = domain_merged["Linked Domains"] / domain_merged["Ref domains Dofollow"]
-        domain_merged["TF:CF Ratio"] = domain_merged["TrustFlow"] / domain_merged["CitationFlow"]
+        output = domain[[
+            "Domain", "Domain Rating", "Ref domains Dofollow", "Linked Domains",
+            "TrustFlow", "CitationFlow",
+            "TopicalTrustFlow_Topic_0", "TopicalTrustFlow_Value_0",
+            "TopicalTrustFlow_Topic_1", "TopicalTrustFlow_Value_1",
+            "TopicalTrustFlow_Topic_2", "TopicalTrustFlow_Value_2",
+            "LD:RD Ratio", "TF:CF Ratio", "Total Traffic"
+        ]]
 
-        # Merge page-level
-        page_merged = pd.merge(df_ahrefs_page, df_majestic_page, on="Page URL", how="inner")
+        st.success("✅ Domain metrics processed!")
+        st.dataframe(output)
+        st.download_button("📥 Download CSV", output.to_csv(index=False), "domain_metrics.csv")
 
-        # Build final output
-        final_df = pd.DataFrame()
-        final_df["Domain"] = domain_merged["Domain"]
-        final_df["Domain Rating"] = domain_merged["Domain Rating"]
-        final_df["Ref domains Dofollow"] = domain_merged["Ref domains Dofollow"]
-        final_df["Linked Domains"] = domain_merged["Linked Domains"]
-        final_df["TrustFlow"] = domain_merged["TrustFlow"]
-        final_df["CitationFlow"] = domain_merged["CitationFlow"]
-        final_df["TopicalTrustFlow_Topic_0"] = domain_merged["TopicalTrustFlow_Topic_0"]
-        final_df["TopicalTrustFlow_Value_0"] = domain_merged["TopicalTrustFlow_Value_0"]
-        final_df["TopicalTrustFlow_Topic_1"] = domain_merged["TopicalTrustFlow_Topic_1"]
-        final_df["TopicalTrustFlow_Value_1"] = domain_merged["TopicalTrustFlow_Value_1"]
-        final_df["TopicalTrustFlow_Topic_2"] = domain_merged["TopicalTrustFlow_Topic_2"]
-        final_df["TopicalTrustFlow_Value_2"] = domain_merged["TopicalTrustFlow_Value_2"]
-        final_df["LD:RD Ratio"] = domain_merged["LD:RD Ratio"]
-        final_df["TF:CF Ratio"] = domain_merged["TF:CF Ratio"]
-        final_df["Total Traffic"] = domain_merged["Total Traffic"]
-        final_df["Page URL"] = page_merged["Page URL"]
-        final_df["Page URL Total Keywords"] = page_merged["Total Keywords"]
-        final_df["Page URL Total Traffic"] = page_merged["Total Traffic"]
-        final_df["Page URL TrustFlow"] = page_merged["TrustFlow"]
-        final_df["Page URL CitationFlow"] = page_merged["CitationFlow"]
+    elif mode == "Page Metrics Only" and ahrefs_page and majestic_page:
+        df_ahrefs = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16")
+        df_majestic = pd.read_csv(majestic_page)
+        df_ahrefs["Page URL"] = df_ahrefs["Target"].str.strip("/")
+        df_majestic["Page URL"] = df_majestic["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+        page = pd.merge(df_ahrefs, df_majestic, on="Page URL", how="inner")
 
-        # Show preview
-        st.success("✅ Successfully processed!")
-        st.dataframe(final_df)
+        output = page[[
+            "Page URL", "Total Keywords", "Total Traffic", "TrustFlow", "CitationFlow"
+        ]].rename(columns={
+            "Total Keywords": "Page URL Total Keywords",
+            "Total Traffic": "Page URL Total Traffic",
+            "TrustFlow": "Page URL TrustFlow",
+            "CitationFlow": "Page URL CitationFlow"
+        })
 
-        # Download
-        csv_data = final_df.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Download Final CSV", data=csv_data, file_name="domain_page_backlink_metrics.csv", mime="text/csv")
+        st.success("✅ Page metrics processed!")
+        st.dataframe(output)
+        st.download_button("📥 Download CSV", output.to_csv(index=False), "page_metrics.csv")
 
-    except Exception as e:
-        st.error(f"❌ An error occurred: {e}")
+    elif mode == "Both Combined" and all([ahrefs_domain, majestic_domain, ahrefs_page, majestic_page]):
+        # Load & normalize domain data
+        df_ahrefs_d = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
+        df_majestic_d = pd.read_csv(majestic_domain)
+        df_ahrefs_d["Domain"] = df_ahrefs_d["Target"].str.strip("/")
+        df_majestic_d["Domain"] = df_majestic_d["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+        domain = pd.merge(df_ahrefs_d, df_majestic_d, on="Domain", how="inner")
+        domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
+        domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
+
+        # Load & normalize page data
+        df_ahrefs_p = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16")
+        df_majestic_p = pd.read_csv(majestic_page)
+        df_ahrefs_p["Page URL"] = df_ahrefs_p["Target"].str.strip("/")
+        df_majestic_p["Page URL"] = df_majestic_p["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+        page = pd.merge(df_ahrefs_p, df_majestic_p, on="Page URL", how="inner")
+
+        final = pd.DataFrame()
+        final["Domain"] = domain["Domain"]
+        final["Domain Rating"] = domain["Domain Rating"]
+        final["Ref domains Dofollow"] = domain["Ref domains Dofollow"]
+        final["Linked Domains"] = domain["Linked Domains"]
+        final["TrustFlow"] = domain["TrustFlow"]
+        final["CitationFlow"] = domain["CitationFlow"]
+        final["TopicalTrustFlow_Topic_0"] = domain["TopicalTrustFlow_Topic_0"]
+        final["TopicalTrustFlow_Value_0"] = domain["TopicalTrustFlow_Value_0"]
+        final["TopicalTrustFlow_Topic_1"] = domain["TopicalTrustFlow_Topic_1"]
+        final["TopicalTrustFlow_Value_1"] = domain["TopicalTrustFlow_Value_1"]
+        final["TopicalTrustFlow_Topic_2"] = domain["TopicalTrustFlow_Topic_2"]
+        final["TopicalTrustFlow_Value_2"] = domain["TopicalTrustFlow_Value_2"]
+        final["LD:RD Ratio"] = domain["LD:RD Ratio"]
+        final["TF:CF Ratio"] = domain["TF:CF Ratio"]
+        final["Total Traffic"] = domain["Total Traffic"]
+        final["Page URL"] = page["Page URL"]
+        final["Page URL Total Keywords"] = page["Total Keywords"]
+        final["Page URL Total Traffic"] = page["Total Traffic"]
+        final["Page URL TrustFlow"] = page["TrustFlow"]
+        final["Page URL CitationFlow"] = page["CitationFlow"]
+
+        st.success("✅ Combined domain + page metrics generated!")
+        st.dataframe(final)
+        st.download_button("📥 Download Combined CSV", final.to_csv(index=False), "domain_page_combined.csv")
+
+except Exception as e:
+    st.error(f"❌ Error: {e}")
