@@ -82,7 +82,7 @@ try:
 
     elif mode == "Both Combined" and all([ahrefs_domain, majestic_domain, ahrefs_page, majestic_page]):
         # Load and clean domain data
-        df_ahrefs_d = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
+        df_ahrefs_d = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16", index_col=False)
         df_majestic_d = pd.read_csv(majestic_domain)
         df_ahrefs_d.columns = df_ahrefs_d.columns.str.strip()
         df_majestic_d.columns = df_majestic_d.columns.str.strip()
@@ -142,3 +142,4 @@ try:
 
 except Exception as e:
     st.error(f"❌ Error: {e}")
+
