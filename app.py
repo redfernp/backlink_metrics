@@ -26,19 +26,19 @@ try:
         df_ahrefs = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
         df_majestic = pd.read_csv(majestic_domain)
 
-        # Normalize column names
         df_ahrefs.columns = df_ahrefs.columns.str.strip()
         df_majestic.columns = df_majestic.columns.str.strip()
 
         required_cols = ["Target", "Domain Rating", "Ref domains Dofollow", "Linked Domains", "Total Traffic"]
-        if any(col not in df_ahrefs.columns for col in required_cols):
-            st.error("❌ One or more required columns are missing in the Ahrefs Domain file.")
+        missing = [col for col in required_cols if col not in df_ahrefs.columns]
+        if missing:
+            st.error(f"❌ Missing column(s) in Ahrefs Domain file: {', '.join(missing)}")
             st.stop()
 
         df_ahrefs["Domain"] = df_ahrefs["Target"].str.strip("/")
         df_majestic["Domain"] = df_majestic["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
-        domain = pd.merge(df_ahrefs, df_majestic, on="Domain", how="inner")
 
+        domain = pd.merge(df_ahrefs, df_majestic, on="Domain", how="inner")
         domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
         domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
 
@@ -64,6 +64,7 @@ try:
 
         df_ahrefs["Page URL"] = df_ahrefs["Target"].str.strip("/")
         df_majestic["Page URL"] = df_majestic["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+
         page = pd.merge(df_ahrefs, df_majestic, on="Page URL", how="inner")
 
         output = page[[
@@ -80,27 +81,36 @@ try:
         st.download_button("📥 Download Page CSV", output.to_csv(index=False), "page_metrics.csv")
 
     elif mode == "Both Combined" and all([ahrefs_domain, majestic_domain, ahrefs_page, majestic_page]):
-        # DOMAIN
+        # Load and clean domain data
         df_ahrefs_d = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
         df_majestic_d = pd.read_csv(majestic_domain)
         df_ahrefs_d.columns = df_ahrefs_d.columns.str.strip()
         df_majestic_d.columns = df_majestic_d.columns.str.strip()
+
+        # ✅ Validate required columns
+        required_cols = ["Target", "Domain Rating", "Ref domains Dofollow", "Linked Domains", "Total Traffic"]
+        missing = [col for col in required_cols if col not in df_ahrefs_d.columns]
+        if missing:
+            st.error(f"❌ Missing column(s) in Ahrefs Domain file: {', '.join(missing)}")
+            st.stop()
+
         df_ahrefs_d["Domain"] = df_ahrefs_d["Target"].str.strip("/")
         df_majestic_d["Domain"] = df_majestic_d["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
         domain = pd.merge(df_ahrefs_d, df_majestic_d, on="Domain", how="inner")
         domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
         domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
 
-        # PAGE
+        # Load and clean page data
         df_ahrefs_p = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16")
         df_majestic_p = pd.read_csv(majestic_page)
         df_ahrefs_p.columns = df_ahrefs_p.columns.str.strip()
         df_majestic_p.columns = df_majestic_p.columns.str.strip()
         df_ahrefs_p["Page URL"] = df_ahrefs_p["Target"].str.strip("/")
         df_majestic_p["Page URL"] = df_majestic_p["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+
         page = pd.merge(df_ahrefs_p, df_majestic_p, on="Page URL", how="inner")
 
-        # Extract domain from URL and match
+        # Extract domain from each page URL
         page["Domain"] = page["Page URL"].str.extract(r"([a-zA-Z0-9.-]+\.[a-z]{2,})")
         combined = pd.merge(page, domain, on="Domain", how="left")
 
