@@ -4,10 +4,8 @@ import pandas as pd
 st.set_page_config(page_title="Backlink Metrics Tool", layout="wide")
 st.title("🔗 Backlink Metrics Tool")
 
-# Step 1: Choose analysis mode
 mode = st.radio("What do you want to analyze?", ["Domain Metrics Only", "Page Metrics Only", "Both Combined"])
 
-# File uploaders
 ahrefs_domain = majestic_domain = ahrefs_page = majestic_page = None
 
 if mode in ["Domain Metrics Only", "Both Combined"]:
@@ -20,10 +18,9 @@ if mode in ["Page Metrics Only", "Both Combined"]:
     ahrefs_page = st.file_uploader("Upload Ahrefs Page CSV (UTF-16, tab-separated)", type="csv", key="ahrefs_page")
     majestic_page = st.file_uploader("Upload Majestic Page CSV", type="csv", key="majestic_page")
 
-# Processing logic
 try:
     if mode == "Domain Metrics Only" and ahrefs_domain and majestic_domain:
-        df_ahrefs = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
+        df_ahrefs = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16", index_col=False)
         df_majestic = pd.read_csv(majestic_domain)
 
         df_ahrefs.columns = df_ahrefs.columns.str.strip()
@@ -39,6 +36,11 @@ try:
         df_majestic["Domain"] = df_majestic["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
 
         domain = pd.merge(df_ahrefs, df_majestic, on="Domain", how="inner")
+
+        if domain.empty:
+            st.warning("No matching domains between Ahrefs and Majestic.")
+            st.stop()
+
         domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
         domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
 
@@ -53,10 +55,10 @@ try:
 
         st.success("✅ Domain metrics processed!")
         st.dataframe(output)
-        st.download_button("📥 Download Domain CSV", output.to_csv(index=False), "domain_metrics.csv")
+        st.download_button("📅 Download Domain CSV", output.to_csv(index=False), "domain_metrics.csv")
 
     elif mode == "Page Metrics Only" and ahrefs_page and majestic_page:
-        df_ahrefs = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16")
+        df_ahrefs = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16", index_col=False)
         df_majestic = pd.read_csv(majestic_page)
 
         df_ahrefs.columns = df_ahrefs.columns.str.strip()
@@ -66,6 +68,10 @@ try:
         df_majestic["Page URL"] = df_majestic["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
 
         page = pd.merge(df_ahrefs, df_majestic, on="Page URL", how="inner")
+
+        if page.empty:
+            st.warning("No matching page URLs between Ahrefs and Majestic.")
+            st.stop()
 
         output = page[[
             "Page URL", "Total Keywords", "Total Traffic", "TrustFlow", "CitationFlow"
@@ -78,16 +84,14 @@ try:
 
         st.success("✅ Page metrics processed!")
         st.dataframe(output)
-        st.download_button("📥 Download Page CSV", output.to_csv(index=False), "page_metrics.csv")
+        st.download_button("📅 Download Page CSV", output.to_csv(index=False), "page_metrics.csv")
 
     elif mode == "Both Combined" and all([ahrefs_domain, majestic_domain, ahrefs_page, majestic_page]):
-        # Load and clean domain data
         df_ahrefs_d = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16", index_col=False)
         df_majestic_d = pd.read_csv(majestic_domain)
         df_ahrefs_d.columns = df_ahrefs_d.columns.str.strip()
         df_majestic_d.columns = df_majestic_d.columns.str.strip()
 
-        # ✅ Validate required columns
         required_cols = ["Target", "Domain Rating", "Ref domains Dofollow", "Linked Domains", "Total Traffic"]
         missing = [col for col in required_cols if col not in df_ahrefs_d.columns]
         if missing:
@@ -96,23 +100,36 @@ try:
 
         df_ahrefs_d["Domain"] = df_ahrefs_d["Target"].str.strip("/")
         df_majestic_d["Domain"] = df_majestic_d["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+
         domain = pd.merge(df_ahrefs_d, df_majestic_d, on="Domain", how="inner")
+
+        if domain.empty:
+            st.warning("No matching domains between Ahrefs and Majestic.")
+            st.stop()
+
         domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
         domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
 
-        # Load and clean page data
-        df_ahrefs_p = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16")
+        df_ahrefs_p = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16", index_col=False)
         df_majestic_p = pd.read_csv(majestic_page)
         df_ahrefs_p.columns = df_ahrefs_p.columns.str.strip()
         df_majestic_p.columns = df_majestic_p.columns.str.strip()
+
         df_ahrefs_p["Page URL"] = df_ahrefs_p["Target"].str.strip("/")
         df_majestic_p["Page URL"] = df_majestic_p["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
 
         page = pd.merge(df_ahrefs_p, df_majestic_p, on="Page URL", how="inner")
 
-        # Extract domain from each page URL
+        if page.empty:
+            st.warning("No matching page URLs between Ahrefs and Majestic.")
+            st.stop()
+
         page["Domain"] = page["Page URL"].str.extract(r"([a-zA-Z0-9.-]+\.[a-z]{2,})")
         combined = pd.merge(page, domain, on="Domain", how="left")
+
+        if combined.empty:
+            st.warning("No matching domains for page URLs. Make sure domain-level data matches page domains.")
+            st.stop()
 
         final = pd.DataFrame()
         final["Domain"] = combined["Domain"]
@@ -138,8 +155,7 @@ try:
 
         st.success("✅ Combined domain + page metrics generated!")
         st.dataframe(final)
-        st.download_button("📥 Download Combined CSV", final.to_csv(index=False), "domain_page_combined.csv")
+        st.download_button("📅 Download Combined CSV", final.to_csv(index=False), "domain_page_combined.csv")
 
 except Exception as e:
     st.error(f"❌ Error: {e}")
-
