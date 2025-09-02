@@ -108,4 +108,5 @@ try:
             st.stop()
 
         domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
-        domain["TF:CF Ratio"] = domain["TrustFlow"] / domain
+        domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
+
