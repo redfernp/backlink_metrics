@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 
@@ -22,7 +23,6 @@ try:
     if mode == "Domain Metrics Only" and ahrefs_domain and majestic_domain:
         df_ahrefs = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16", index_col=False)
         df_majestic = pd.read_csv(majestic_domain)
-
         df_ahrefs.columns = df_ahrefs.columns.str.strip()
         df_majestic.columns = df_majestic.columns.str.strip()
 
@@ -32,8 +32,8 @@ try:
             st.error(f"❌ Missing column(s) in Ahrefs Domain file: {', '.join(missing)}")
             st.stop()
 
-        df_ahrefs["Domain"] = df_ahrefs["Target"].str.strip("/")
-        df_majestic["Domain"] = df_majestic["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+        df_ahrefs["Domain"] = df_ahrefs["Target"].str.strip("/").str.lower().str.replace(r"^www\.", "", regex=True)
+        df_majestic["Domain"] = df_majestic["Item"].str.replace(r"https?://", "", regex=True).str.strip("/").str.lower().str.replace(r"^www\.", "", regex=True)
 
         domain = pd.merge(df_ahrefs, df_majestic, on="Domain", how="inner")
 
@@ -60,7 +60,6 @@ try:
     elif mode == "Page Metrics Only" and ahrefs_page and majestic_page:
         df_ahrefs = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16", index_col=False)
         df_majestic = pd.read_csv(majestic_page)
-
         df_ahrefs.columns = df_ahrefs.columns.str.strip()
         df_majestic.columns = df_majestic.columns.str.strip()
 
@@ -98,8 +97,8 @@ try:
             st.error(f"❌ Missing column(s) in Ahrefs Domain file: {', '.join(missing)}")
             st.stop()
 
-        df_ahrefs_d["Domain"] = df_ahrefs_d["Target"].str.strip("/")
-        df_majestic_d["Domain"] = df_majestic_d["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+        df_ahrefs_d["Domain"] = df_ahrefs_d["Target"].str.strip("/").str.lower().str.replace(r"^www\.", "", regex=True)
+        df_majestic_d["Domain"] = df_majestic_d["Item"].str.replace(r"https?://", "", regex=True).str.strip("/").str.lower().str.replace(r"^www\.", "", regex=True)
 
         domain = pd.merge(df_ahrefs_d, df_majestic_d, on="Domain", how="inner")
 
@@ -124,7 +123,13 @@ try:
             st.warning("No matching page URLs between Ahrefs and Majestic.")
             st.stop()
 
-        page["Domain"] = page["Page URL"].str.extract(r"([a-zA-Z0-9.-]+\.[a-z]{2,})")
+        page["Domain"] = page["Page URL"].str.extract(r"([a-zA-Z0-9.-]+\.[a-z]{2,})")[0]
+        page["Domain"] = page["Domain"].str.lower().str.replace(r"^www\.", "", regex=True).str.strip("/")
+
+        # DEBUG: show samples to compare
+        st.write("🔍 Sample domains in page data:", page["Domain"].dropna().unique()[:5])
+        st.write("🔍 Sample domains in domain data:", domain["Domain"].dropna().unique()[:5])
+
         combined = pd.merge(page, domain, on="Domain", how="left")
 
         if combined.empty or "Domain Rating" not in combined.columns:
