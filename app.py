@@ -1,12 +1,19 @@
-
 import streamlit as st
 import pandas as pd
+import tldextract
 
 st.set_page_config(page_title="Backlink Metrics Tool", layout="wide")
 st.title("🔗 Backlink Metrics Tool")
 
+# Helper to extract root domain
+def extract_root_domain(url):
+    extracted = tldextract.extract(url)
+    return f"{extracted.domain}.{extracted.suffix}" if extracted.domain and extracted.suffix else None
+
+# Choose mode
 mode = st.radio("What do you want to analyze?", ["Domain Metrics Only", "Page Metrics Only", "Both Combined"])
 
+# Uploads
 ahrefs_domain = majestic_domain = ahrefs_page = majestic_page = None
 
 if mode in ["Domain Metrics Only", "Both Combined"]:
@@ -19,10 +26,12 @@ if mode in ["Page Metrics Only", "Both Combined"]:
     ahrefs_page = st.file_uploader("Upload Ahrefs Page CSV (UTF-16, tab-separated)", type="csv", key="ahrefs_page")
     majestic_page = st.file_uploader("Upload Majestic Page CSV", type="csv", key="majestic_page")
 
+# Processing
 try:
     if mode == "Domain Metrics Only" and ahrefs_domain and majestic_domain:
-        df_ahrefs = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16", index_col=False)
+        df_ahrefs = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
         df_majestic = pd.read_csv(majestic_domain)
+
         df_ahrefs.columns = df_ahrefs.columns.str.strip()
         df_majestic.columns = df_majestic.columns.str.strip()
 
@@ -55,11 +64,12 @@ try:
 
         st.success("✅ Domain metrics processed!")
         st.dataframe(output)
-        st.download_button("📅 Download Domain CSV", output.to_csv(index=False), "domain_metrics.csv")
+        st.download_button("📥 Download Domain CSV", output.to_csv(index=False), "domain_metrics.csv")
 
     elif mode == "Page Metrics Only" and ahrefs_page and majestic_page:
-        df_ahrefs = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16", index_col=False)
+        df_ahrefs = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16")
         df_majestic = pd.read_csv(majestic_page)
+
         df_ahrefs.columns = df_ahrefs.columns.str.strip()
         df_majestic.columns = df_majestic.columns.str.strip()
 
@@ -83,10 +93,11 @@ try:
 
         st.success("✅ Page metrics processed!")
         st.dataframe(output)
-        st.download_button("📅 Download Page CSV", output.to_csv(index=False), "page_metrics.csv")
+        st.download_button("📥 Download Page CSV", output.to_csv(index=False), "page_metrics.csv")
 
     elif mode == "Both Combined" and all([ahrefs_domain, majestic_domain, ahrefs_page, majestic_page]):
-        df_ahrefs_d = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16", index_col=False)
+        # DOMAIN MERGE
+        df_ahrefs_d = pd.read_csv(ahrefs_domain, sep="\t", encoding="utf-16")
         df_majestic_d = pd.read_csv(majestic_domain)
         df_ahrefs_d.columns = df_ahrefs_d.columns.str.strip()
         df_majestic_d.columns = df_majestic_d.columns.str.strip()
@@ -99,7 +110,6 @@ try:
 
         df_ahrefs_d["Domain"] = df_ahrefs_d["Target"].str.strip("/").str.lower().str.replace(r"^www\.", "", regex=True)
         df_majestic_d["Domain"] = df_majestic_d["Item"].str.replace(r"https?://", "", regex=True).str.strip("/").str.lower().str.replace(r"^www\.", "", regex=True)
-
         domain = pd.merge(df_ahrefs_d, df_majestic_d, on="Domain", how="inner")
 
         if domain.empty:
@@ -109,26 +119,24 @@ try:
         domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
         domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
 
-        df_ahrefs_p = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16", index_col=False)
+        # PAGE MERGE
+        df_ahrefs_p = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16")
         df_majestic_p = pd.read_csv(majestic_page)
         df_ahrefs_p.columns = df_ahrefs_p.columns.str.strip()
         df_majestic_p.columns = df_majestic_p.columns.str.strip()
 
         df_ahrefs_p["Page URL"] = df_ahrefs_p["Target"].str.strip("/")
         df_majestic_p["Page URL"] = df_majestic_p["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
-
         page = pd.merge(df_ahrefs_p, df_majestic_p, on="Page URL", how="inner")
 
         if page.empty:
             st.warning("No matching page URLs between Ahrefs and Majestic.")
             st.stop()
 
-        page["Domain"] = page["Page URL"].str.extract(r"([a-zA-Z0-9.-]+\.[a-z]{2,})")[0]
-        page["Domain"] = page["Domain"].str.lower().str.replace(r"^www\.", "", regex=True).str.strip("/")
+        page["Domain"] = page["Page URL"].apply(extract_root_domain).str.lower()
 
-        # DEBUG: show samples to compare
-        st.write("🔍 Sample domains in page data:", page["Domain"].dropna().unique()[:5])
-        st.write("🔍 Sample domains in domain data:", domain["Domain"].dropna().unique()[:5])
+        st.write("🔍 Sample extracted page domains:", page["Domain"].dropna().unique()[:5])
+        st.write("🔍 Sample domains in domain file:", domain["Domain"].dropna().unique()[:5])
 
         combined = pd.merge(page, domain, on="Domain", how="left")
 
@@ -161,7 +169,7 @@ try:
 
         st.success("✅ Combined domain + page metrics generated!")
         st.dataframe(final)
-        st.download_button("📅 Download Combined CSV", final.to_csv(index=False), "domain_page_combined.csv")
+        st.download_button("📥 Download Combined CSV", final.to_csv(index=False), "domain_page_combined.csv")
 
 except Exception as e:
     st.error(f"❌ Error: {e}")
