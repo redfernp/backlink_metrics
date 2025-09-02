@@ -110,3 +110,53 @@ try:
         domain["LD:RD Ratio"] = domain["Linked Domains"] / domain["Ref domains Dofollow"]
         domain["TF:CF Ratio"] = domain["TrustFlow"] / domain["CitationFlow"]
 
+        df_ahrefs_p = pd.read_csv(ahrefs_page, sep="\t", encoding="utf-16", index_col=False)
+        df_majestic_p = pd.read_csv(majestic_page)
+        df_ahrefs_p.columns = df_ahrefs_p.columns.str.strip()
+        df_majestic_p.columns = df_majestic_p.columns.str.strip()
+
+        df_ahrefs_p["Page URL"] = df_ahrefs_p["Target"].str.strip("/")
+        df_majestic_p["Page URL"] = df_majestic_p["Item"].str.replace(r"https?://", "", regex=True).str.strip("/")
+
+        page = pd.merge(df_ahrefs_p, df_majestic_p, on="Page URL", how="inner")
+
+        if page.empty:
+            st.warning("No matching page URLs between Ahrefs and Majestic.")
+            st.stop()
+
+        page["Domain"] = page["Page URL"].str.extract(r"([a-zA-Z0-9.-]+\.[a-z]{2,})")
+        combined = pd.merge(page, domain, on="Domain", how="left")
+
+        if combined.empty or "Domain Rating" not in combined.columns:
+            st.error("❌ 'Domain Rating' column is missing after merge. This means no page URLs matched domain data.")
+            st.dataframe(combined.head(10))
+            st.stop()
+
+        final = pd.DataFrame()
+        final["Domain"] = combined["Domain"]
+        final["Domain Rating"] = combined["Domain Rating"]
+        final["Ref domains Dofollow"] = combined["Ref domains Dofollow"]
+        final["Linked Domains"] = combined["Linked Domains"]
+        final["TrustFlow"] = combined["TrustFlow_y"]
+        final["CitationFlow"] = combined["CitationFlow_y"]
+        final["TopicalTrustFlow_Topic_0"] = combined["TopicalTrustFlow_Topic_0"]
+        final["TopicalTrustFlow_Value_0"] = combined["TopicalTrustFlow_Value_0"]
+        final["TopicalTrustFlow_Topic_1"] = combined["TopicalTrustFlow_Topic_1"]
+        final["TopicalTrustFlow_Value_1"] = combined["TopicalTrustFlow_Value_1"]
+        final["TopicalTrustFlow_Topic_2"] = combined["TopicalTrustFlow_Topic_2"]
+        final["TopicalTrustFlow_Value_2"] = combined["TopicalTrustFlow_Value_2"]
+        final["LD:RD Ratio"] = combined["LD:RD Ratio"]
+        final["TF:CF Ratio"] = combined["TF:CF Ratio"]
+        final["Total Traffic"] = combined["Total Traffic_y"]
+        final["Page URL"] = combined["Page URL"]
+        final["Page URL Total Keywords"] = combined["Total Keywords"]
+        final["Page URL Total Traffic"] = combined["Total Traffic_x"]
+        final["Page URL TrustFlow"] = combined["TrustFlow_x"]
+        final["Page URL CitationFlow"] = combined["CitationFlow_x"]
+
+        st.success("✅ Combined domain + page metrics generated!")
+        st.dataframe(final)
+        st.download_button("📅 Download Combined CSV", final.to_csv(index=False), "domain_page_combined.csv")
+
+except Exception as e:
+    st.error(f"❌ Error: {e}")
